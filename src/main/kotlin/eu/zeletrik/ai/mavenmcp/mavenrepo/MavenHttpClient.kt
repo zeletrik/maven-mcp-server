@@ -8,6 +8,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.WebClientResponseException
+import org.springframework.web.reactive.function.client.toEntity
 import org.springframework.web.util.UriComponentsBuilder
 import tools.jackson.dataformat.xml.XmlMapper
 import tools.jackson.module.kotlin.kotlinModule
@@ -59,6 +60,7 @@ class MavenHttpClient(
      * Fetch the raw `…/{a}-{version}.{extension}` resource for [coordinates]. [file] is a closed
      * enum, so the extension never carries caller input into the URL.
      */
+    @Suppress("LongParameterList")
     suspend fun fetchArtifactFile(
         baseUrl: String,
         headers: Map<String, String>,
@@ -83,6 +85,7 @@ class MavenHttpClient(
      * another one, "see other" means "I do not host this" — which for a failover backend is a
      * not-found, not an error. Left false a 3xx keeps falling through to the empty-body source error.
      */
+    @Suppress("LongParameterList")
     suspend fun fetchText(
         uri: URI,
         headers: Map<String, String>,
@@ -96,7 +99,7 @@ class MavenHttpClient(
                 .uri(uri)
                 .headers { target -> headers.forEach(target::add) }
                 .retrieve()
-                .toEntity(String::class.java)
+                .toEntity<String>()
                 .timeout(timeout)
                 .awaitSingleOrNull()
         } catch (e: WebClientResponseException) {

@@ -1,9 +1,9 @@
 package eu.zeletrik.ai.mavenmcp.mavenrepo
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonRootName
 import tools.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper
 import tools.jackson.dataformat.xml.annotation.JacksonXmlProperty
-import tools.jackson.dataformat.xml.annotation.JacksonXmlRootElement
 
 /**
  * Binding for maven-metadata.xml (shared across all Maven-layout backends). Only
@@ -15,7 +15,7 @@ import tools.jackson.dataformat.xml.annotation.JacksonXmlRootElement
  * (not Kotlin constructor-creator binding), mirroring the XML one-to-one with `useWrapping = false`
  * to avoid the wrapper-vs-item localName / creator-property rename clash constructor binding causes.
  */
-@JacksonXmlRootElement(localName = "metadata")
+@JsonRootName("metadata")
 @JsonIgnoreProperties(ignoreUnknown = true)
 class MavenMetadataXml {
     var versioning: Versioning? = null

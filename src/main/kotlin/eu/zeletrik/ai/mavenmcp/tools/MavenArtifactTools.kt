@@ -36,12 +36,19 @@ class MavenArtifactTools(
     @McpTool(
         name = "get_latest_version",
         description = "Return the latest version of a Maven artifact. By default returns the latest " +
-            "STABLE release (excludes alpha/beta/RC/milestone/snapshot); set prerelease=true to " +
-            "include pre-releases. Provide the Maven groupId and artifactId. For a GRADLE PLUGIN, " +
-            "use its marker coordinates — groupId is the plugin id and artifactId is the plugin id " +
-            "with '.gradle.plugin' appended (plugin 'org.sonarqube' -> groupId 'org.sonarqube', " +
-            "artifactId 'org.sonarqube.gradle.plugin'); those resolve from the Gradle Plugin Portal, " +
-            "which often has releases Maven Central does not.",
+                "STABLE release (excludes alpha/beta/RC/milestone/snapshot); set prerelease=true to " +
+                "include pre-releases. Provide the Maven groupId and artifactId. For a GRADLE PLUGIN, " +
+                "use its marker coordinates — groupId is the plugin id and artifactId is the plugin id " +
+                "with '.gradle.plugin' appended (plugin 'org.sonarqube' -> groupId 'org.sonarqube', " +
+                "artifactId 'org.sonarqube.gradle.plugin'); those resolve from the Gradle Plugin Portal, " +
+                "which often has releases Maven Central does not.",
+        annotations = McpTool.McpAnnotations(
+            title = "Get latest version of a Maven artifact",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun getLatestVersion(
         @McpToolParam(description = "Maven groupId, e.g. org.springframework", required = true)
@@ -88,8 +95,15 @@ class MavenArtifactTools(
     @McpTool(
         name = "list_versions",
         description = "List ALL published versions of a Maven artifact, newest first, with a total " +
-            "count and the resolved latest stable version. For a Gradle plugin use its marker " +
-            "coordinates: groupId = plugin id, artifactId = plugin id + '.gradle.plugin'.",
+                "count and the resolved latest stable version. For a Gradle plugin use its marker " +
+                "coordinates: groupId = plugin id, artifactId = plugin id + '.gradle.plugin'.",
+        annotations = McpTool.McpAnnotations(
+            title = "List versions of a Maven artifact",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun listVersions(
         @McpToolParam(description = "Maven groupId", required = true) groupId: String,
@@ -128,7 +142,14 @@ class MavenArtifactTools(
     @McpTool(
         name = "check_version",
         description = "Check whether a specific version of a Maven artifact is published. Returns " +
-            "exists=true/false for an existing artifact; not_found only when the artifact itself is absent.",
+                "exists=true/false for an existing artifact; not_found only when the artifact itself is absent.",
+        annotations = McpTool.McpAnnotations(
+            title = "Check if a specific version of a Maven artifact exists",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun checkVersion(
         @McpToolParam(description = "Maven groupId", required = true) groupId: String,
@@ -160,9 +181,16 @@ class MavenArtifactTools(
     @McpTool(
         name = "get_pom",
         description = "Return the raw POM XML of a Maven artifact for a specific version, or the " +
-            "literal \"latest\" to resolve the latest stable version first (set prerelease=true to " +
-            "resolve the latest including pre-releases). For a Gradle plugin marker artifact " +
-            "(<plugin-id>.gradle.plugin) the POM names the plugin's implementation coordinates.",
+                "literal \"latest\" to resolve the latest stable version first (set prerelease=true to " +
+                "resolve the latest including pre-releases). For a Gradle plugin marker artifact " +
+                "(<plugin-id>.gradle.plugin) the POM names the plugin's implementation coordinates.",
+        annotations = McpTool.McpAnnotations(
+            title = "Get the raw POM XML of a Maven artifact",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun getPom(
         @McpToolParam(description = "Maven groupId", required = true) groupId: String,
@@ -211,9 +239,16 @@ class MavenArtifactTools(
     @McpTool(
         name = "get_version_catalog",
         description = "Return the raw TOML of a Gradle version catalog that is published as a Maven " +
-            "artifact (the coordinates used in settings.gradle.kts `from(\"group:artifact:version\")`). " +
-            "Pass the literal \"latest\" as version to fetch the newest stable catalog. Use this to " +
-            "see which dependency versions a shared catalog pins.",
+                "artifact (the coordinates used in settings.gradle.kts `from(\"group:artifact:version\")`). " +
+                "Pass the literal \"latest\" as version to fetch the newest stable catalog. Use this to " +
+                "see which dependency versions a shared catalog pins.",
+        annotations = McpTool.McpAnnotations(
+            title = "Get a raw TOML of a Gradle version catalog",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun getVersionCatalog(
         @McpToolParam(description = "Maven groupId of the catalog, e.g. com.example.commons", required = true)
@@ -269,8 +304,15 @@ class MavenArtifactTools(
     @McpTool(
         name = "search_artifacts",
         description = "Search for Maven artifacts matching a keyword query across Maven Central and " +
-            "any configured internal registries (e.g. GitLab). Returns up to 'limit' matches (default " +
-            "20, clamped to 1..100), each with its groupId, artifactId, and latest version.",
+                "any configured internal registries (e.g. GitLab). Returns up to 'limit' matches (default " +
+                "20, clamped to 1..100), each with its groupId, artifactId, and latest version.",
+        annotations = McpTool.McpAnnotations(
+            title = "Search for Maven artifacts",
+            readOnlyHint = true,
+            destructiveHint = false,
+            idempotentHint = true,
+            openWorldHint = true,
+        ),
     )
     fun searchArtifacts(
         @McpToolParam(description = "Search query, e.g. 'jackson databind'", required = true)
