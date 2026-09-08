@@ -13,8 +13,14 @@ import org.springframework.web.reactive.function.client.WebClient
 @Configuration(proxyBeanMethods = false)
 class AppConfig {
 
+    /**
+     * Built from the AUTOCONFIGURED [WebClient.Builder] rather than `WebClient.builder()`, because
+     * that is what carries Boot's observation instrumentation: with a raw builder the calls to
+     * Maven Central, GitLab and the plugin portal produce no `http.client.requests` metrics, which
+     * are the most interesting numbers this service has to report.
+     */
     @Bean
-    fun webClient(): WebClient = WebClient.builder().build()
+    fun webClient(builder: WebClient.Builder): WebClient = builder.build()
 
     /** The domain resolver is deliberately Spring-free; it is exposed as a bean only here. */
     @Bean

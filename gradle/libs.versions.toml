@@ -13,6 +13,11 @@ mockwebserver = "5.5.0"
 [libraries]
 spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
 spring-boot-starter-webflux-test = { module = "org.springframework.boot:spring-boot-starter-webflux-test" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+# Boot 4 split client concerns out of the webflux starter: this module is what supplies the
+# autoconfigured WebClient.Builder (and with it the outbound observation instrumentation).
+spring-boot-webclient = { module = "org.springframework.boot:spring-boot-webclient" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
 spring-boot-devtools = { module = "org.springframework.boot:spring-boot-devtools" }
 reactor-kotlin-extensions = { module = "io.projectreactor.kotlin:reactor-kotlin-extensions" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }

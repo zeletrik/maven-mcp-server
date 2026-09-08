@@ -12,7 +12,7 @@ credentials), and an opt-in GitLab Maven registry.
 
 Stack: Kotlin 2.4 on a Java 25 toolchain, Spring Boot 4.1 WebFlux, Spring Modulith, Jackson 3
 (`tools.jackson.*` packages, not `com.fasterxml`), Gradle 9.6.1 with a version catalog
-(`gradle/libs.versions.toml`).
+(`gradle/libs.versions.toml`). Actuator exposes `health`, `info` and `prometheus` only.
 
 ## Commands
 
@@ -109,6 +109,20 @@ module means updating that test. `ArchitectureGuardTest` enforces declined depen
 - `MavenHttpClient.fetchText` reads the full `ResponseEntity`, not just the body, so a redirect is
   classified by status — classifying on body text would couple the code to one repository's error
   wording.
+- **Boot 4 splits autoconfiguration across many small modules**, so a starter no longer implies the
+  autoconfiguration you expect. `spring-boot-starter-webflux` is server-side only: the autoconfigured
+  `WebClient.Builder` needs `spring-boot-webclient`, and without it `AppConfig` fails at startup with
+  "No qualifying bean of type WebClient$Builder". `WebTestClient`'s auto-configured bean is another
+  module again (`spring-boot-webtestclient`) even though the webflux-test starter provides the class.
+  When a bean that "should" exist doesn't, look for a missing `spring-boot-<feature>` module before
+  suspecting anything else.
+- `AppConfig` builds the `WebClient` from the INJECTED `WebClient.Builder`, not `WebClient.builder()`.
+  The raw builder carries no observation instrumentation, so outbound calls to the registries would
+  produce no `http_client_requests` metrics — the most useful series this service emits, tagged by
+  `client_name` per backend.
+- The container healthcheck GETs `/actuator/health`. It must NOT GET `/mcp`: BusyBox wget (unlike
+  GNU wget) collapses the 405 that endpoint returns, a 404, and connection-refused all to exit 1, so
+  such a probe can never distinguish up from down and the container stays permanently unhealthy.
 - `.releaserc.yml` must exist and must list plugins explicitly. semantic-release's DEFAULT plugin
   list includes `@semantic-release/npm`, which fails this repo with `ENOPKG Missing package.json` —
   there is no npm package here. The version flows gradle.properties → JAR name → image tag:

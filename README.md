@@ -66,6 +66,64 @@ instance  https://gitlab.example.com/api/v4/packages/maven
 
 ## Running it
 
+### Docker
+
+```sh
+docker run -d --name maven-mcp -p 8080:8080 zeletrik/maven-mcp-server:latest
+```
+
+That is the whole setup for the public backends — Maven Central and the Gradle Plugin Portal need no
+credentials. MCP clients then connect to `http://localhost:8080/mcp`.
+
+To add your internal GitLab registry, pass the token from the host rather than writing it into a
+command that lands in your shell history:
+
+```sh
+docker run -d --name maven-mcp -p 8080:8080 \
+  -e GITLAB_ENABLED=true \
+  -e GITLAB_BASE_URL="https://gitlab.example.com/api/v4/groups/<id>/-/packages/maven" \
+  -e GITLAB_TOKEN="$GITLAB_TOKEN" \
+  zeletrik/maven-mcp-server:latest
+```
+
+### Docker Compose
+
+```yaml
+# compose.yaml
+services:
+  maven-mcp:
+    image: zeletrik/maven-mcp-server:latest
+    container_name: maven-mcp
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Maven Central and the Gradle Plugin Portal are on by default and need nothing here.
+      # Everything below is only for an internal GitLab registry.
+      GITLAB_ENABLED: "true"
+      GITLAB_BASE_URL: "https://gitlab.example.com/api/v4/groups/<id>/-/packages/maven"
+      # Read from the host environment or a .env file beside this compose file — never inline.
+      GITLAB_TOKEN: "${GITLAB_TOKEN:?set GITLAB_TOKEN in your environment or .env}"
+      # Optional: only if the packages API cannot be derived from GITLAB_BASE_URL.
+      # GITLAB_SEARCH_URL: "https://gitlab.example.com/api/v4/groups/<id>/packages"
+      # Optional: drop the Gradle Plugin Portal and serve Maven Central only.
+      # GRADLEPLUGINPORTAL_ENABLED: "false"
+```
+
+```sh
+docker compose up -d
+```
+
+The image already declares its own `HEALTHCHECK` (a GET on `/actuator/health`), so Compose reports
+the container healthy once the server answers — no `healthcheck:` block needed here.
+
+Any setting in `application.yaml` can be overridden by an environment variable using Spring Boot's
+relaxed binding: uppercase it, turn dots into underscores, and **delete** dashes. That last rule is
+easy to get wrong — `gradle-plugin-portal.enabled` becomes `GRADLEPLUGINPORTAL_ENABLED`, not
+`GRADLE_PLUGIN_PORTAL_ENABLED`.
+
+### From source
+
 Requires a Java 25 toolchain. Gradle's toolchain auto-detection is disabled, so `JAVA_HOME` must
 point at it:
 
@@ -74,8 +132,33 @@ JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew bootRun   # serves on :8080
 JAVA_HOME=$(/usr/libexec/java_home -v 25) ./gradlew build     # compile + run the tests
 ```
 
-Transport is HTTP (SSE / streamable-HTTP); there is no STDIO transport. No authentication is applied
-to the transport, so run it on a trusted network.
+### Connecting a client
+
+Transport is HTTP (SSE / streamable-HTTP) at `/mcp`; there is no STDIO transport. No authentication
+is applied to the transport, so run it on a trusted network rather than exposing the port publicly.
+
+## Observability
+
+Three Actuator endpoints are exposed, and deliberately no more — the transport has no
+authentication, so publishing `env`, `beans` or `configprops` alongside them would hand over the
+configuration of whatever registry this is pointed at.
+
+| Endpoint | Purpose |
+|---|---|
+| `/actuator/health` | `UP`/`DOWN`, with `liveness` and `readiness` groups. The container healthcheck uses this. |
+| `/actuator/info` | Build and version information. |
+| `/actuator/prometheus` | Metrics in Prometheus text format, for scraping. |
+
+Beyond the usual JVM and `http_server_requests` series, outbound calls to the registries are
+instrumented as `http_client_requests`, tagged by `client_name` — so you can see per-backend latency
+and error rates, and tell "Maven Central is slow" apart from "this server is slow":
+
+```
+http_client_requests_seconds_count{client_name="repo1.maven.org",method="GET",outcome="SUCCESS",...}
+```
+
+A scrape config pointed at `maven-mcp:8080` with a metrics path of `/actuator/prometheus` is all
+Prometheus needs.
 
 ## How failures are reported
 

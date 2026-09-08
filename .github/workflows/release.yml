@@ -140,7 +140,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           context: .
           push: true
           # Single-arch homelab image: skip the provenance attestation so `docker pull` gets a

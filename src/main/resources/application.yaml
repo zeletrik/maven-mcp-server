@@ -12,6 +12,14 @@ spring:
         annotation-scanner:
           enabled: true
 
+# Actuator. Only these three endpoints are exposed — the default web exposure is health alone, and
+# widening to "*" would publish env/beans/configprops on a transport that has no authentication.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
 maven-central:
   metadata-base-url: "https://repo1.maven.org/maven2/"
   search-base-url: "https://search.maven.org/solrsearch/select"

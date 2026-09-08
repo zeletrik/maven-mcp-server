@@ -14,7 +14,7 @@ COPY build/libs/*-${APP_VERSION}.jar service.jar
 RUN java -Djarmode=tools -jar service.jar extract --destination application
 # NOTE: no JDK AOT cache (Project Leyden) is trained here. A Leyden AOT cache bakes in CPU-specific
 # compiled code (it records the instruction-set extensions of the machine that trained it). Since
-# this image is built on a CI runner and run on arbitrary homelab CPUs, a baked-in cache can crash
+# this image is built on a CI runner and run on arbitrary host CPUs, a baked-in cache can crash
 # with SIGILL (illegal instruction) on a host whose CPU lacks those extensions. Portability wins
 # over the small startup speedup; see the ENTRYPOINT below.
 
@@ -37,14 +37,15 @@ RUN addgroup -S app && adduser -S -G app app \
     && chown -R app:app /opt/maven-mcp-server
 USER app
 
-# Liveness probe. Actuator is not on the classpath, and the MCP endpoint only accepts POST, so a GET
-# to /mcp answers 405 — which still proves the server is up and speaking HTTP. wget exits 8 on an
-# HTTP error response and 4 when the connection is refused, so both 0 and 8 count as alive.
+# Liveness probe against Actuator: /actuator/health answers 200 when UP and 503 otherwise, and
+# BusyBox wget exits non-zero on any non-2xx as well as on a refused connection, so a plain GET is
+# a correct probe here. (A GET against /mcp is NOT: BusyBox wget collapses the 405 that endpoint
+# returns, a 404, and connection-refused all to exit 1, so it cannot tell "up" from "down".)
 HEALTHCHECK --start-period=40s --interval=30s --timeout=3s --retries=3 \
-    CMD wget -qO- http://localhost:8080/mcp >/dev/null 2>&1 || [ $? -eq 8 ]
+    CMD wget -qO- http://localhost:8080/actuator/health >/dev/null 2>&1
 
 # Plain launch — no JDK AOT cache, so the JIT compiles for the actual runtime CPU and the image
-# runs on any amd64 host. (A build-time Leyden cache trained on the CI runner's CPU can SIGILL on a
-# homelab CPU with a narrower instruction set.) spring.aot.enabled is intentionally not set because
+# runs on any host. (A build-time Leyden cache trained on the CI runner's CPU can SIGILL on a
+# host CPU with a narrower instruction set.) spring.aot.enabled is intentionally not set because
 # the JAR was not built with Spring's processAot step.
 ENTRYPOINT ["java", "-jar", "service.jar"]
