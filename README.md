@@ -19,6 +19,11 @@ reasons unrelated to the code. This server answers from the registry instead.
 | `get_pom` | The raw POM XML for a version, or for the literal `"latest"`. |
 | `get_version_catalog` | The raw TOML of a Gradle version catalog published as a Maven artifact. |
 
+The search query reaches the registry unchanged, so its syntax applies: hyphens are fine
+(`jackson-databind`), but a **bare space is rejected** — quote the phrase (`"jackson databind"`) or
+join terms with `AND`. Prefixing `a:` matches the artifactId alone (`a:jackson-databind`) and ranks
+the artifact you meant above unrelated ones whose groupId happens to contain the term.
+
 "Latest" means the highest **stable** version by Maven's own ordering — pre-release qualifiers
 (`alpha`, `beta`, `rc`, `m`/`milestone`, `cr`, `pr`, `ea`, `SNAPSHOT`) are excluded unless you ask
 for them. A missing stable release is reported as such rather than silently downgraded to a
@@ -143,20 +148,20 @@ instead queries every backend concurrently and interleaves the results round-rob
 with many matches cannot fill the whole page and hide the others. De-duplication happens in
 precedence order, so a coordinate offered by two registries resolves to the higher-precedence one.
 
-| Backend | Default | Notes |
-|---|---|---|
-| Maven Central | always on | Also provides keyword search, via Central's Solr endpoint. |
-| Gradle Plugin Portal | on | Public, no credentials. Covers plugin marker artifacts. No search API. |
-| GitLab Maven registry | off | For internal artifacts. Needs a URL and a token. |
+| Backend               | Default   | Notes                                                                  |
+|-----------------------|-----------|------------------------------------------------------------------------|
+| Maven Central         | always on | Also provides keyword search, via Central's Solr endpoint.             |
+| Gradle Plugin Portal  | on        | Public, no credentials. Covers plugin marker artifacts. No search API. |
+| GitLab Maven registry | off       | For internal artifacts. Needs a URL and a token.                       |
 
 ### Configuring the GitLab backend
 
 No registry URL is committed. Set `gitlab.enabled=true` and supply the rest through the environment:
 
-| Variable | Purpose |
-|---|---|
-| `GITLAB_BASE_URL` | Full GitLab Maven registry URL (see below). |
-| `GITLAB_TOKEN` | Read token for a private registry. |
+| Variable            | Purpose                                                                              |
+|---------------------|--------------------------------------------------------------------------------------|
+| `GITLAB_BASE_URL`   | Full GitLab Maven registry URL (see below).                                          |
+| `GITLAB_TOKEN`      | Read token for a private registry.                                                   |
 | `GITLAB_SEARCH_URL` | Optional. Only to override the packages-API URL otherwise derived from the base URL. |
 
 The registry level is encoded in the base URL itself, and `<id>` may be numeric or a URL-encoded
@@ -250,11 +255,11 @@ Three Actuator endpoints are exposed, and deliberately no more — the transport
 authentication, so publishing `env`, `beans` or `configprops` alongside them would hand over the
 configuration of whatever registry this is pointed at.
 
-| Endpoint | Purpose |
-|---|---|
-| `/actuator/health` | `UP`/`DOWN`, with `liveness` and `readiness` groups. The container healthcheck uses this. |
-| `/actuator/info` | Build and version information. |
-| `/actuator/prometheus` | Metrics in Prometheus text format, for scraping. |
+| Endpoint               | Purpose                                                                                   |
+|------------------------|-------------------------------------------------------------------------------------------|
+| `/actuator/health`     | `UP`/`DOWN`, with `liveness` and `readiness` groups. The container healthcheck uses this. |
+| `/actuator/info`       | Build and version information.                                                            |
+| `/actuator/prometheus` | Metrics in Prometheus text format, for scraping.                                          |
 
 Beyond the usual JVM and `http_server_requests` series, outbound calls to the registries are
 instrumented as `http_client_requests`, tagged by `client_name` — so you can see per-backend latency
@@ -272,11 +277,11 @@ Prometheus needs.
 Every tool returns a structured result rather than failing the call, so a model can react to the
 outcome instead of seeing a broken tool. Each carries a `status`:
 
-| `status` | Meaning |
-|---|---|
-| `ok` | The payload is populated. |
-| `not_found` | The artifact, version or file genuinely does not exist on any backend. |
-| `source_error` | A backend was unreachable, timed out, or returned unparseable data. |
+| `status`           | Meaning                                                                               |
+|--------------------|---------------------------------------------------------------------------------------|
+| `ok`               | The payload is populated.                                                             |
+| `not_found`        | The artifact, version or file genuinely does not exist on any backend.                |
+| `source_error`     | A backend was unreachable, timed out, or returned unparseable data.                   |
 | `validation_error` | The coordinates were rejected before any network call; `message` names the parameter. |
 
 The distinction between `not_found` and `source_error` is deliberate: the first is an answer, the
@@ -284,6 +289,18 @@ second means the question could not be answered. A non-`ok` result never carries
 and `message` holds the detail.
 
 A zero-match search is an `ok` result with an empty list — "nothing matched" is a valid answer.
+
+`search_artifacts` carries one extra field, because it is the only tool that aggregates several
+registries and so is the only one that can half succeed:
+
+| Field     | Meaning                                                                                                                 |
+|-----------|-------------------------------------------------------------------------------------------------------------------------|
+| `partial` | `true` when a registry could not be reached. The results are real but incomplete, and `message` names what was missing. |
+
+The status stays `ok` in that case — the call did succeed and the matches are usable. The flag
+matters because without it a short list from a degraded registry is indistinguishable from a query
+that genuinely matched little, and the natural conclusion ("that artifact does not exist") would be
+wrong. If you see `partial: true`, treat a missing artifact as unknown rather than absent.
 
 ## Contributing
 

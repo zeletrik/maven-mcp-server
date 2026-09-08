@@ -6,6 +6,7 @@ import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMatch
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMetadata
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
 import eu.zeletrik.ai.mavenmcp.artifact.Coordinates
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.artifact.VersionResolver
 import eu.zeletrik.ai.mavenmcp.mavenrepo.MavenHttpClient
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -52,9 +53,9 @@ class GitLabArtifactRepository(
             properties.baseUrl, properties.authHeaders(), coordinates, version, file, properties.timeout,
         )
 
-    override suspend fun search(query: String, limit: Int): ArtifactResult<List<ArtifactMatch>> {
+    override suspend fun search(query: String, limit: Int): ArtifactResult<SearchOutcome> {
         val searchUrl = properties.effectiveSearchUrl()
-        if (searchUrl.isBlank()) return ArtifactResult.Success(emptyList())
+        if (searchUrl.isBlank()) return ArtifactResult.Success(SearchOutcome(emptyList()))
         val uri = UriComponentsBuilder.fromUriString(searchUrl)
             .queryParam("package_type", "maven")
             .queryParam("package_name", query)
@@ -72,13 +73,13 @@ class GitLabArtifactRepository(
         return when (text) {
             is ArtifactResult.Success -> parsePackages(text.value, query, limit)
             // A missing packages endpoint / no access should not fail the aggregate search.
-            is ArtifactResult.NotFound -> ArtifactResult.Success(emptyList())
+            is ArtifactResult.NotFound -> ArtifactResult.Success(SearchOutcome(emptyList()))
             is ArtifactResult.SourceError -> text
             is ArtifactResult.ValidationError -> text
         }
     }
 
-    private fun parsePackages(json: String, query: String, limit: Int): ArtifactResult<List<ArtifactMatch>> =
+    private fun parsePackages(json: String, query: String, limit: Int): ArtifactResult<SearchOutcome> =
         try {
             // groupBy keeps encounter order, so GitLab's own package ordering survives into results.
             val versionsByCoordinates = jsonMapper.readValue(json, Array<GitLabPackage>::class.java)
@@ -88,7 +89,7 @@ class GitLabArtifactRepository(
                 val latest = versionResolver.latestStable(versions) ?: versionResolver.latest(versions)
                 ArtifactMatch(coordinates.groupId, coordinates.artifactId, latest)
             }
-            ArtifactResult.Success(matches)
+            ArtifactResult.Success(SearchOutcome(matches))
         } catch (e: Exception) {
             ArtifactResult.SourceError("Unparseable GitLab packages response for '$query': ${e.message}")
         }

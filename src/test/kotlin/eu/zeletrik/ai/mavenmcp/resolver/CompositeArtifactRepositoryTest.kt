@@ -4,6 +4,7 @@ import eu.zeletrik.ai.mavenmcp.artifact.ArtifactBackend
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMatch
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMetadata
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.artifact.Coordinates
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -66,10 +67,10 @@ class CompositeArtifactRepositoryTest {
     @Test
     fun `search aggregates central and gitlab, central winning duplicate coordinates`() = runBlocking {
         coEvery { central.search("q", 20) } returns ArtifactResult.Success(
-            listOf(ArtifactMatch("g", "public", "3.0"), ArtifactMatch("g", "shared", "central-v")),
+            SearchOutcome(listOf(ArtifactMatch("g", "public", "3.0"), ArtifactMatch("g", "shared", "central-v"))),
         )
         coEvery { gitlab.search("q", 20) } returns ArtifactResult.Success(
-            listOf(ArtifactMatch("g", "shared", "gitlab-v"), ArtifactMatch("g", "internal", "2.0")),
+            SearchOutcome(listOf(ArtifactMatch("g", "shared", "gitlab-v"), ArtifactMatch("g", "internal", "2.0"))),
         )
 
         val result = composite.search("q", 20)
@@ -80,7 +81,7 @@ class CompositeArtifactRepositoryTest {
         // entirely rather than merely losing its position — hence 'internal' is GitLab's first.
         assertEquals(
             listOf("public" to "3.0", "internal" to "2.0", "shared" to "central-v"),
-            result.value.map { it.artifactId to it.latestVersion },
+            result.value.matches.map { it.artifactId to it.latestVersion },
         )
         coVerify { gitlab.search("q", 20) }
     }
@@ -90,26 +91,28 @@ class CompositeArtifactRepositoryTest {
         // The regression this guards: concatenating meant Central alone could fill `limit`, after
         // which GitLab was never even consulted, so internal artifacts vanished from search.
         coEvery { central.search("q", 5) } returns ArtifactResult.Success(
-            (1..5).map { ArtifactMatch("g", "public$it", "1.0") },
+            SearchOutcome((1..5).map { ArtifactMatch("g", "public$it", "1.0") }),
         )
         coEvery { gitlab.search("q", 5) } returns ArtifactResult.Success(
-            listOf(ArtifactMatch("g", "internal", "2.0")),
+            SearchOutcome(listOf(ArtifactMatch("g", "internal", "2.0"))),
         )
 
         val result = composite.search("q", 5)
 
         assertTrue(result is ArtifactResult.Success)
-        assertEquals(5, result.value.size, "the limit is still respected")
+        assertEquals(5, result.value.matches.size, "the limit is still respected")
         assertTrue(
-            result.value.any { it.artifactId == "internal" },
-            "internal match must survive a full page of public ones; got ${result.value.map { it.artifactId }}",
+            result.value.matches.any { it.artifactId == "internal" },
+            "internal match must survive a full page of public ones; got ${result.value.matches.map { it.artifactId }}",
         )
     }
 
     @Test
     fun `every backend is queried even when an earlier one already filled the limit`() = runBlocking {
-        coEvery { central.search("q", 1) } returns ArtifactResult.Success(listOf(ArtifactMatch("g", "public", "1.0")))
-        coEvery { gitlab.search("q", 1) } returns ArtifactResult.Success(listOf(ArtifactMatch("g", "internal", "2.0")))
+        coEvery { central.search("q", 1) } returns
+            ArtifactResult.Success(SearchOutcome(listOf(ArtifactMatch("g", "public", "1.0"))))
+        coEvery { gitlab.search("q", 1) } returns
+            ArtifactResult.Success(SearchOutcome(listOf(ArtifactMatch("g", "internal", "2.0"))))
 
         composite.search("q", 1)
 
@@ -119,12 +122,42 @@ class CompositeArtifactRepositoryTest {
     }
 
     @Test
-    fun `search still returns gitlab results when central errors`() = runBlocking {
-        coEvery { central.search("q", 20) } returns ArtifactResult.SourceError("central down")
-        coEvery { gitlab.search("q", 20) } returns ArtifactResult.Success(listOf(ArtifactMatch("g", "internal", "2.0")))
+    fun `a failed source is reported as partial rather than silently dropped`() = runBlocking {
+        // The whole point: usable results survive, but the caller is told the list is incomplete.
+        // Without this, "Central was down" and "Central found nothing" look identical.
+        coEvery { central.search("q", 20) } returns ArtifactResult.SourceError("central unreachable")
+        coEvery { gitlab.search("q", 20) } returns ArtifactResult.Success(
+            SearchOutcome(listOf(ArtifactMatch("g", "internal", "2.0"))),
+        )
 
         val result = composite.search("q", 20)
 
-        assertTrue(result is ArtifactResult.Success && result.value.single().artifactId == "internal")
+        assertTrue(result is ArtifactResult.Success, "a partial search still succeeds")
+        assertEquals(listOf("internal"), result.value.matches.map { it.artifactId })
+        assertEquals(listOf("central unreachable"), result.value.unavailableSources)
+    }
+
+    @Test
+    fun `a complete search reports nothing unavailable`() = runBlocking {
+        coEvery { central.search("q", 20) } returns ArtifactResult.Success(
+            SearchOutcome(listOf(ArtifactMatch("g", "public", "1.0"))),
+        )
+        coEvery { gitlab.search("q", 20) } returns ArtifactResult.Success(SearchOutcome(emptyList()))
+
+        val result = composite.search("q", 20)
+
+        assertTrue(result is ArtifactResult.Success)
+        assertTrue(result.value.unavailableSources.isEmpty(), "nothing failed, so nothing to report")
+    }
+
+    @Test
+    fun `search still returns gitlab results when central errors`() = runBlocking {
+        coEvery { central.search("q", 20) } returns ArtifactResult.SourceError("central down")
+        coEvery { gitlab.search("q", 20) } returns
+            ArtifactResult.Success(SearchOutcome(listOf(ArtifactMatch("g", "internal", "2.0"))))
+
+        val result = composite.search("q", 20)
+
+        assertTrue(result is ArtifactResult.Success && result.value.matches.single().artifactId == "internal")
     }
 }

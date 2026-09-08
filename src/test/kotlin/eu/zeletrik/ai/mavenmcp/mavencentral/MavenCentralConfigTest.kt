@@ -24,7 +24,7 @@ class MavenCentralConfigTest {
     @Test
     fun `MavenCentralProperties binds base URLs and timeout from application yaml`() {
         assertEquals("https://repo1.maven.org/maven2/", properties.metadataBaseUrl)
-        assertEquals("https://search.maven.org/solrsearch/select", properties.searchBaseUrl)
+        assertEquals("https://central.sonatype.com/solrsearch/select", properties.searchBaseUrl)
         assertEquals(Duration.ofSeconds(5), properties.timeout)
     }
 

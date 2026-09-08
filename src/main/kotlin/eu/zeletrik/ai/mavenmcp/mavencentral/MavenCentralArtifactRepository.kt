@@ -6,6 +6,7 @@ import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMatch
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMetadata
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
 import eu.zeletrik.ai.mavenmcp.artifact.Coordinates
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.mavenrepo.MavenHttpClient
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Repository
@@ -42,7 +43,7 @@ class MavenCentralArtifactRepository(
     ): ArtifactResult<String> =
         client.fetchArtifactFile(properties.metadataBaseUrl, NO_HEADERS, coordinates, version, file, properties.timeout)
 
-    override suspend fun search(query: String, limit: Int): ArtifactResult<List<ArtifactMatch>> {
+    override suspend fun search(query: String, limit: Int): ArtifactResult<SearchOutcome> {
         val uri = UriComponentsBuilder.fromUriString(properties.searchBaseUrl)
             .queryParam("q", query)
             .queryParam("rows", limit)
@@ -65,13 +66,13 @@ class MavenCentralArtifactRepository(
         }
     }
 
-    private fun parseSearch(json: String, query: String): ArtifactResult<List<ArtifactMatch>> =
+    private fun parseSearch(json: String, query: String): ArtifactResult<SearchOutcome> =
         try {
             val parsed = jsonMapper.readValue(json, SolrSearchResponse::class.java)
             val matches = parsed.response.docs.mapNotNull { doc ->
                 if (doc.g != null && doc.a != null) ArtifactMatch(doc.g, doc.a, doc.latestVersion) else null
             }
-            ArtifactResult.Success(matches)
+            ArtifactResult.Success(SearchOutcome(matches))
         } catch (e: Exception) {
             ArtifactResult.SourceError("Unparseable search response for '$query': ${e.message}")
         }

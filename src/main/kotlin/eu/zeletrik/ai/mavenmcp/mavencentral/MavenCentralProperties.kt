@@ -17,6 +17,6 @@ private const val DEFAULT_TIMEOUT_SECONDS = 5L
 @ConfigurationProperties(prefix = "maven-central")
 data class MavenCentralProperties(
     val metadataBaseUrl: String = "https://repo1.maven.org/maven2/",
-    val searchBaseUrl: String = "https://search.maven.org/solrsearch/select",
+    val searchBaseUrl: String = "https://central.sonatype.com/solrsearch/select",
     val timeout: Duration = Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS),
 )

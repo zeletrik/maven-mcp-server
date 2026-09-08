@@ -305,7 +305,11 @@ class MavenArtifactTools(
         name = "search_artifacts",
         description = "Search for Maven artifacts matching a keyword query across Maven Central and " +
                 "any configured internal registries (e.g. GitLab). Returns up to 'limit' matches (default " +
-                "20, clamped to 1..100), each with its groupId, artifactId, and latest version.",
+                "20, clamped to 1..100), each with its groupId, artifactId, and latest version. " +
+                "Prefer 'a:<artifact-id>' when you know the artifact name — a plain term also " +
+                "matches groupIds that merely contain it, which buries the obvious answer. If " +
+                "partial=true a registry was unreachable and the list is incomplete, so absence of a " +
+                "result does not mean the artifact does not exist — retry or check a coordinate directly.",
         annotations = McpTool.McpAnnotations(
             title = "Search for Maven artifacts",
             readOnlyHint = true,
@@ -315,7 +319,15 @@ class MavenArtifactTools(
         ),
     )
     fun searchArtifacts(
-        @McpToolParam(description = "Search query, e.g. 'jackson databind'", required = true)
+        @McpToolParam(
+            description = "Search term, passed to the registry's query syntax unchanged. A single " +
+                "word or a hyphenated artifact name works well ('jackson-databind'). A BARE SPACE " +
+                "is rejected with an error — quote a phrase (\"jackson databind\") or join terms " +
+                "with AND. Prefix a: to match the artifactId only ('a:jackson-databind'), which " +
+                "ranks the exact artifact above unrelated ones whose groupId merely contains the " +
+                "term; g: does the same for groupId.",
+            required = true,
+        )
         query: String,
         @McpToolParam(description = "Max results, 1..100 (default 20)", required = false)
         limit: Int? = null,
@@ -323,12 +335,19 @@ class MavenArtifactTools(
         try {
             val effectiveLimit = (limit ?: DEFAULT_SEARCH_LIMIT).coerceIn(MIN_SEARCH_LIMIT, MAX_SEARCH_LIMIT)
             when (val result = repository.search(query, effectiveLimit)) {
-                is ArtifactResult.Success ->
+                is ArtifactResult.Success -> {
+                    val outcome = result.value
                     SearchArtifactsResult(
-                        query,
-                        result.value.map { SearchMatch(it.groupId, it.artifactId, it.latestVersion) },
-                        STATUS_OK,
+                        query = query,
+                        results = outcome.matches.map { SearchMatch(it.groupId, it.artifactId, it.latestVersion) },
+                        status = STATUS_OK,
+                        // Only set when something is actually missing, so a complete search stays quiet.
+                        message = outcome.unavailableSources
+                            .takeIf { it.isNotEmpty() }
+                            ?.joinToString("; ", prefix = "Results are incomplete, some sources were unavailable: "),
+                        partial = outcome.unavailableSources.isNotEmpty(),
                     )
+                }
 
                 is ArtifactResult.NotFound ->
                     SearchArtifactsResult(query, status = STATUS_NOT_FOUND, message = result.message)

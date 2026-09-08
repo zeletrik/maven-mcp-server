@@ -7,9 +7,11 @@ import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMetadata
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactRepository
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
 import eu.zeletrik.ai.mavenmcp.artifact.Coordinates
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Component
 
@@ -43,27 +45,37 @@ class CompositeArtifactRepository(
     ): ArtifactResult<String> =
         failover { it.fetchFile(coordinates, version, file) }
 
-    override suspend fun search(query: String, limit: Int): ArtifactResult<List<ArtifactMatch>> {
+    override suspend fun search(query: String, limit: Int): ArtifactResult<SearchOutcome> {
         // Unlike a coordinate lookup, search wants every backend's answer, and the backends are
         // independent — so fan out concurrently rather than paying them end to end. awaitAll keeps
         // the backends order, which is what makes the precedence rules below meaningful.
         val results = coroutineScope { backends.map { async { it.search(query, limit) } }.awaitAll() }
 
         val perBackend = mutableListOf<List<ArtifactMatch>>()
+        val unavailable = mutableListOf<String>()
         var sourceError: ArtifactResult.SourceError? = null
         for (result in results) {
             when (result) {
-                is ArtifactResult.Success -> perBackend += result.value
-                is ArtifactResult.SourceError -> sourceError = result
+                is ArtifactResult.Success -> perBackend += result.value.matches
+                is ArtifactResult.SourceError -> {
+                    sourceError = result
+                    unavailable += result.message
+                }
                 is ArtifactResult.NotFound -> Unit
                 is ArtifactResult.ValidationError -> return result
             }
         }
+        // A source that failed while another answered still leaves usable results, so this stays a
+        // success — but the caller is told which sources are missing, otherwise a short list is
+        // indistinguishable from a genuinely narrow one.
+        if (unavailable.isNotEmpty() && perBackend.isNotEmpty()) {
+            log.warn("Search for '{}' is partial; unavailable: {}", query, unavailable)
+        }
         return when {
             // Non-empty means at least one backend answered, even if it matched nothing.
-            perBackend.isNotEmpty() -> ArtifactResult.Success(interleave(perBackend, limit))
+            perBackend.isNotEmpty() -> ArtifactResult.Success(SearchOutcome(interleave(perBackend, limit), unavailable))
             sourceError != null -> sourceError
-            else -> ArtifactResult.Success(emptyList())
+            else -> ArtifactResult.Success(SearchOutcome(emptyList()))
         }
     }
 
@@ -76,6 +88,10 @@ class CompositeArtifactRepository(
      * still resolves to the higher-precedence one; interleaving then only decides position, never
      * which copy survives.
      */
+    private companion object {
+        private val log = LoggerFactory.getLogger(CompositeArtifactRepository::class.java)
+    }
+
     private fun interleave(perBackend: List<List<ArtifactMatch>>, limit: Int): List<ArtifactMatch> {
         val claimed = mutableSetOf<Pair<String, String>>()
         val deduped = perBackend.map { matches -> matches.filter { claimed.add(it.groupId to it.artifactId) } }

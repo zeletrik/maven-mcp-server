@@ -39,5 +39,5 @@ interface ArtifactRepository {
      * [query] is used as the search term as-is. An empty match set is a successful empty list,
      * not [ArtifactResult.NotFound].
      */
-    suspend fun search(query: String, limit: Int): ArtifactResult<List<ArtifactMatch>>
+    suspend fun search(query: String, limit: Int): ArtifactResult<SearchOutcome>
 }

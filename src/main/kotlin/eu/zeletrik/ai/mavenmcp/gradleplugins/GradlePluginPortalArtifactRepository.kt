@@ -6,6 +6,7 @@ import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMatch
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMetadata
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
 import eu.zeletrik.ai.mavenmcp.artifact.Coordinates
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.mavenrepo.MavenHttpClient
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.core.annotation.Order
@@ -72,8 +73,8 @@ class GradlePluginPortalArtifactRepository(
         )
 
     /** The portal has no search endpoint; an empty success keeps the aggregate search unaffected. */
-    override suspend fun search(query: String, limit: Int): ArtifactResult<List<ArtifactMatch>> =
-        ArtifactResult.Success(emptyList())
+    override suspend fun search(query: String, limit: Int): ArtifactResult<SearchOutcome> =
+        ArtifactResult.Success(SearchOutcome(emptyList()))
 
     private companion object {
         val NO_HEADERS = emptyMap<String, String>()

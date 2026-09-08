@@ -80,8 +80,8 @@ class GitLabArtifactRepositoryTest {
         val result = repo().search("starter", 20)
 
         assertTrue(result is ArtifactResult.Success, "expected success but was $result")
-        assertEquals(2, result.value.size)
-        val security = result.value.first { it.artifactId == "spring-boot-starter-security" }
+        assertEquals(2, result.value.matches.size)
+        val security = result.value.matches.first { it.artifactId == "spring-boot-starter-security" }
         assertEquals("com.example.commons.springboot", security.groupId)
         assertEquals("2.0.1", security.latestVersion) // latest stable of [1.0.0, 2.0.1]
         val recorded = server.takeRequest()
@@ -100,7 +100,7 @@ class GitLabArtifactRepositoryTest {
             VersionResolver(),
         )
         val result = repo.search("anything", 20)
-        assertTrue(result is ArtifactResult.Success && result.value.isEmpty())
+        assertTrue(result is ArtifactResult.Success && result.value.matches.isEmpty())
     }
 
     private companion object {

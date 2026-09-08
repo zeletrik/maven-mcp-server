@@ -105,7 +105,7 @@ class GradlePluginPortalArtifactRepositoryTest {
     fun `search contributes nothing and issues no request`() = runBlocking {
         val result = repo().search("sonarqube", 20)
 
-        assertTrue(result is ArtifactResult.Success && result.value.isEmpty())
+        assertTrue(result is ArtifactResult.Success && result.value.matches.isEmpty())
         assertEquals(0, server.requestCount, "the portal has no search API, so it must not call out")
     }
 

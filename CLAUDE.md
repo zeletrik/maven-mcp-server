@@ -66,7 +66,10 @@ module means updating that test. `ArchitectureGuardTest` enforces declined depen
 ### Invariants
 
 - **Sealed result, never throw**: `ArtifactResult` has exactly four variants (Success, NotFound,
-  SourceError, ValidationError). Tools exhaustively map every variant inside `mono { }` and never
+  SourceError, ValidationError). When a case does not fit them — an aggregated search where one
+  registry answered and another did not — enrich the PAYLOAD, never add a variant: `search` returns
+  `SearchOutcome(matches, unavailableSources)` and the tool maps that to a `partial` flag. A fifth
+  variant would ripple through every exhaustive `when` in every tool. Tools exhaustively map every variant inside `mono { }` and never
   let an exception or errored `Mono` cross the tool boundary. No partial payloads on error.
 - **Coroutines end-to-end, Mono at the rim**: repository/adapter/resolver paths are `suspend` with
   no `.block()`/`runBlocking` in production code (tests may block). `@McpTool` methods cannot be

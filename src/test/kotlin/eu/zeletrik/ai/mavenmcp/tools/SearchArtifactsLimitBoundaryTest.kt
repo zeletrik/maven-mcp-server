@@ -2,6 +2,7 @@ package eu.zeletrik.ai.mavenmcp.tools
 
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactRepository
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.artifact.VersionResolver
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -25,7 +26,8 @@ class SearchArtifactsLimitBoundaryTest {
 
     private fun effectiveLimitFor(requested: Int?): Int {
         val captured = slot<Int>()
-        coEvery { repository.search(any(), capture(captured)) } returns ArtifactResult.Success(emptyList())
+        coEvery { repository.search(any(), capture(captured)) } returns
+            ArtifactResult.Success(SearchOutcome(emptyList()))
         tools.searchArtifacts("q", requested).block()
         return captured.captured
     }

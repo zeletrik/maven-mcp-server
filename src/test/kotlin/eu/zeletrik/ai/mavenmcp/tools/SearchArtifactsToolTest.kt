@@ -3,11 +3,13 @@ package eu.zeletrik.ai.mavenmcp.tools
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactMatch
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactRepository
 import eu.zeletrik.ai.mavenmcp.artifact.ArtifactResult
+import eu.zeletrik.ai.mavenmcp.artifact.SearchOutcome
 import eu.zeletrik.ai.mavenmcp.artifact.VersionResolver
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -23,9 +25,11 @@ class SearchArtifactsToolTest {
     @Test
     fun `search_artifacts returns matches with groupId, artifactId and latestVersion`() {
         coEvery { repository.search("jackson", any()) } returns ArtifactResult.Success(
-            listOf(
-                ArtifactMatch("com.fasterxml.jackson.core", "jackson-databind", "3.1.4"),
-                ArtifactMatch("com.example", "no-latest", null),
+            SearchOutcome(
+                listOf(
+                    ArtifactMatch("com.fasterxml.jackson.core", "jackson-databind", "3.1.4"),
+                    ArtifactMatch("com.example", "no-latest", null),
+                ),
             ),
         )
 
@@ -41,12 +45,43 @@ class SearchArtifactsToolTest {
 
     @Test
     fun `search_artifacts returns an empty list (not an error) on no matches`() {
-        coEvery { repository.search(any(), any()) } returns ArtifactResult.Success(emptyList())
+        coEvery { repository.search(any(), any()) } returns ArtifactResult.Success(SearchOutcome(emptyList()))
 
         val result = tools.searchArtifacts("nomatchxyz", null).block()!!
 
         assertEquals("ok", result.status)
         assertTrue(result.results.isEmpty())
+    }
+
+    @Test
+    fun `an unavailable source surfaces as partial, with the results still returned`() {
+        coEvery { repository.search(any(), any()) } returns ArtifactResult.Success(
+            SearchOutcome(
+                matches = listOf(ArtifactMatch("g", "internal", "2.0")),
+                unavailableSources = listOf("central unreachable"),
+            ),
+        )
+
+        val result = tools.searchArtifacts("q", null).block()!!
+
+        // Still ok: the call worked and the matches are real. partial says the list is short
+        // because a registry is down, not because the query matched little.
+        assertEquals("ok", result.status)
+        assertEquals(1, result.results.size)
+        assertTrue(result.partial, "a search missing a source must announce it")
+        assertTrue(result.message!!.contains("central unreachable"), "message names what was unavailable")
+    }
+
+    @Test
+    fun `a complete search is not marked partial`() {
+        coEvery { repository.search(any(), any()) } returns ArtifactResult.Success(
+            SearchOutcome(listOf(ArtifactMatch("g", "a", "1.0"))),
+        )
+
+        val result = tools.searchArtifacts("q", null).block()!!
+
+        assertFalse(result.partial)
+        assertEquals(null, result.message)
     }
 
     @Test

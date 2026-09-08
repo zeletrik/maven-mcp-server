@@ -135,9 +135,9 @@ class MavenCentralArtifactRepositoryTest {
         val result = repo().search("g:com.example", 20)
 
         assertTrue(result is ArtifactResult.Success, "expected success but was $result")
-        assertEquals(2, result.value.size)
-        assertEquals("1.2.3", result.value[0].latestVersion)
-        assertNull(result.value[1].latestVersion, "missing latestVersion must parse to null, not error")
+        assertEquals(2, result.value.matches.size)
+        assertEquals("1.2.3", result.value.matches[0].latestVersion)
+        assertNull(result.value.matches[1].latestVersion, "missing latestVersion must parse to null, not error")
         val recorded = server.takeRequest()
         assertTrue(recorded.path!!.contains("q=g:com.example") || recorded.path!!.contains("q=g%3Acom.example"))
         assertTrue(recorded.path!!.contains("rows=20"))

@@ -22,7 +22,10 @@ management:
 
 maven-central:
   metadata-base-url: "https://repo1.maven.org/maven2/"
-  search-base-url: "https://search.maven.org/solrsearch/select"
+  # central.sonatype.com rather than search.maven.org: the latter drops most connections under
+  # any sustained use (observed ~1 in 5 answering), which surfaces as a silently short result
+  # list. Same Solr API and response shape, so nothing else changes.
+  search-base-url: "https://central.sonatype.com/solrsearch/select"
   timeout: 5s
 
 # Gradle Plugin Portal, consulted LAST. Public (no credentials), so it is on by default; it covers
