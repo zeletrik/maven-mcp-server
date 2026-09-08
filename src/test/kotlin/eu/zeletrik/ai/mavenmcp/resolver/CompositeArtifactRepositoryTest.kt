@@ -75,12 +75,47 @@ class CompositeArtifactRepositoryTest {
         val result = composite.search("q", 20)
 
         assertTrue(result is ArtifactResult.Success)
-        // Both backends consulted; results merged in precedence order; 'shared' deduped to Central's.
+        // Round-robin across backends: central[0], gitlab[0], central[1]. 'shared' is claimed by
+        // Central during the precedence-ordered de-duplication, so GitLab's copy is dropped
+        // entirely rather than merely losing its position — hence 'internal' is GitLab's first.
         assertEquals(
-            listOf("public" to "3.0", "shared" to "central-v", "internal" to "2.0"),
+            listOf("public" to "3.0", "internal" to "2.0", "shared" to "central-v"),
             result.value.map { it.artifactId to it.latestVersion },
         )
         coVerify { gitlab.search("q", 20) }
+    }
+
+    @Test
+    fun `a full page of public matches does not crowd out the internal one`() = runBlocking {
+        // The regression this guards: concatenating meant Central alone could fill `limit`, after
+        // which GitLab was never even consulted, so internal artifacts vanished from search.
+        coEvery { central.search("q", 5) } returns ArtifactResult.Success(
+            (1..5).map { ArtifactMatch("g", "public$it", "1.0") },
+        )
+        coEvery { gitlab.search("q", 5) } returns ArtifactResult.Success(
+            listOf(ArtifactMatch("g", "internal", "2.0")),
+        )
+
+        val result = composite.search("q", 5)
+
+        assertTrue(result is ArtifactResult.Success)
+        assertEquals(5, result.value.size, "the limit is still respected")
+        assertTrue(
+            result.value.any { it.artifactId == "internal" },
+            "internal match must survive a full page of public ones; got ${result.value.map { it.artifactId }}",
+        )
+    }
+
+    @Test
+    fun `every backend is queried even when an earlier one already filled the limit`() = runBlocking {
+        coEvery { central.search("q", 1) } returns ArtifactResult.Success(listOf(ArtifactMatch("g", "public", "1.0")))
+        coEvery { gitlab.search("q", 1) } returns ArtifactResult.Success(listOf(ArtifactMatch("g", "internal", "2.0")))
+
+        composite.search("q", 1)
+
+        // Short-circuiting on a full page was what made search non-deterministic in production.
+        coVerify { central.search("q", 1) }
+        coVerify { gitlab.search("q", 1) }
     }
 
     @Test

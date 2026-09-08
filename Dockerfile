@@ -22,6 +22,10 @@ RUN java -Djarmode=tools -jar service.jar extract --destination application
 FROM public.ecr.aws/docker/library/amazoncorretto:25-alpine
 
 ARG APP_VERSION
+# Promote the build arg to a runtime variable. application.yaml reads ${APP_VERSION:0.0.0-dev} for
+# the version reported in the MCP handshake, and an ARG is visible only during the build — without
+# this line every image, whatever its tag, introduces itself as 0.0.0-dev.
+ENV APP_VERSION=${APP_VERSION}
 
 # The app sets no server.port, so it serves on the Spring Boot default.
 EXPOSE 8080

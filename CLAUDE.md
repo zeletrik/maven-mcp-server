@@ -50,9 +50,12 @@ Seven Spring Modulith modules under `eu.zeletrik.ai.mavenmcp`, each declared via
   **marker** artifacts (`<plugin-id>:<plugin-id>.gradle.plugin`), which Central does not host at all;
   the marker POM names the plugin's implementation coordinates. No search API, so `search` is empty.
 - **resolver** — `@Primary CompositeArtifactRepository`, the repository the tools actually inject.
-  Version/POM lookups use **failover** (first backend that has the artifact wins; a source error
-  outranks a not-found when nothing succeeds); `search` **aggregates** all backends, de-duplicated
-  by coordinates with higher-precedence backend winning.
+  Version/file lookups use **failover** (first backend that has the artifact wins; a source error
+  outranks a not-found when nothing succeeds). `search` **aggregates** instead: it fans out to every
+  backend concurrently and interleaves the results round-robin, capped at the limit. De-duplication
+  runs first, in precedence order, so interleaving decides position but never which copy wins. It
+  used to concatenate and stop once the page was full, which let Maven Central hide internal
+  artifacts entirely — the regression tests in `CompositeArtifactRepositoryTest` pin that.
 - **tools** — the MCP tool surface: the six `@McpTool` methods, validation, and result→response
   mapping. Depends on `artifact` ONLY — never on a concrete backend (dependency inversion). Named
   `tools` rather than `mcp` because the root package already carries the protocol.

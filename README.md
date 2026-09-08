@@ -139,7 +139,9 @@ container everyone points at is a different operational shape.
 ## Backends
 
 Sources are consulted in precedence order; the first one that has the artifact wins. Keyword search
-instead queries every backend and merges the results, de-duplicated by coordinates.
+instead queries every backend concurrently and interleaves the results round-robin, so a registry
+with many matches cannot fill the whole page and hide the others. De-duplication happens in
+precedence order, so a coordinate offered by two registries resolves to the higher-precedence one.
 
 | Backend | Default | Notes |
 |---|---|---|
@@ -282,6 +284,11 @@ second means the question could not be answered. A non-`ok` result never carries
 and `message` holds the detail.
 
 A zero-match search is an `ok` result with an empty list — "nothing matched" is a valid answer.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — build commands, the design rules the tests enforce, and the
+commit conventions that drive releases.
 
 ## License
 
