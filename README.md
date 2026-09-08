@@ -31,6 +31,111 @@ Gradle plugins publish a *marker* artifact, so a plugin id maps to coordinates m
 resolve from the Gradle Plugin Portal, which frequently carries releases Maven Central does not. The
 marker POM names the plugin's implementation artifact.
 
+## Why a server, rather than curl or a CLI wrapper
+
+An agent with shell access can already `curl` a `maven-metadata.xml`, and a skill can already wrap
+`glab`. Both work. This exists because of what they get wrong at the margins, and the margins are
+where a wrong version number costs you a broken build.
+
+### "Latest" is harder than it looks
+
+`maven-metadata.xml` carries `<latest>` and `<release>` tags, and they are the obvious things to
+read. They track the most recent *upload*, though — `<release>` excludes `SNAPSHOT`, but nothing
+else, so a milestone or release candidate satisfies it. Every obvious strategy therefore agrees on
+the wrong answer. For `org.springframework.boot:spring-boot` at the time of writing:
+
+| Approach                          | Answer      |
+|-----------------------------------|-------------|
+| Trust `<latest>`                  | `4.2.0-M1`  |
+| Trust `<release>`                 | `4.2.0-M1`  |
+| Take the last `<version>` element | `4.2.0-M1`  |
+| Sort the version strings          | `4.2.0-M1`  |
+| `get_latest_version`              | **`4.1.1`** |
+
+Four independent naive readings, one milestone build, and a plausible-looking number that a model
+will state with complete confidence. This server ignores both metadata tags, orders versions with
+Maven's own `ComparableVersion` — string sorting also puts `1.9` above `1.10` — and filters
+pre-release qualifiers unless you ask for them. When only pre-releases exist it says so rather than
+quietly returning one.
+
+### One question can need several registries
+
+Asking for the latest SonarQube Gradle plugin against Maven Central returns `3.3`, because that is
+where its implementation artifact stopped being published. The live version is `7.5.0.8588`, on the
+Gradle Plugin Portal, under a plugin marker coordinate Central does not host at all. An agent
+curling Central gets a real answer from a real registry that is off by four major versions.
+
+Getting that right by hand means knowing which registry to try, in what order, under which coordinate
+convention, and how to treat a miss in one as "keep looking" rather than "does not exist". That
+precedence logic is what this server is.
+
+### The credential stays out of the agent's reach
+
+A skill around `glab` hands the agent a shell and an authenticated CLI: it can delete a package, push
+a tag, or open a merge request, and the token is one `env` away. Here the token lives in the server's
+environment and the agent gets six read-only tools. The reachable capability *is* the tool list —
+coordinates are validated against an allowlist and file extensions come from a closed enum, so
+requests cannot be steered off the configured registries either.
+
+### It answers in a line, not a page
+
+`kotlin-stdlib`'s metadata is ~10 KB of XML across 301 versions. Answering "what version should I
+use?" from that means pulling all of it into context and parsing it there, every time. The same
+question through `get_latest_version` is one line. The difference compounds across a dependency
+review.
+
+### Measured: it is faster too, which is not the obvious result
+
+The natural assumption is that a tool call must be slower — it is an extra hop, and the server does
+the same fetch you would have done. It measures the other way round. Auditing this project's own ten
+dependencies:
+
+|                    | MCP tool calls | `curl` per lookup |
+|--------------------|----------------|-------------------|
+| wall clock         | **523 ms**     | 1186 ms           |
+| bytes into context | **2.3 KB**     | 55.5 KB           |
+| approx. tokens     | **~565**       | ~13,900           |
+
+Per lookup that is 52 ms against 119 ms. The reason is not clever code, it is connection reuse —
+decomposing a single Spring Boot lookup on the same machine:
+
+|                                          | median |
+|------------------------------------------|--------|
+| localhost round trip (floor)             | 12 ms  |
+| pooled HTTPS to the registry             | 42 ms  |
+| TLS handshake, paid again per shell call | +56 ms |
+| process spawn, paid again per `curl`     | +30 ms |
+
+The server keeps a warm pooled connection to each registry, so it pays the handshake once and
+amortises it over every later call. A shell invocation cannot: each one is a fresh process and a
+fresh TLS session. That is also why the gap widens with volume rather than narrowing.
+
+Two things this comparison deliberately does **not** do, both of which favour the `curl` side. It
+excludes the model's own reasoning time, even though the 55 KB of XML still has to be read and
+reduced to ten version numbers by the model. And it gives the DIY path a *correct* pre-release
+filter and Maven-ordering implementation for free — that is the gap described above, held constant
+here so this measures mechanics alone. Numbers are medians from one machine and network; treat the
+ratios as the finding, not the milliseconds.
+
+### "Not found" and "could not check" stay distinct
+
+Every tool returns one of four statuses, and `not_found` is never conflated with `source_error`. A
+registry that is down, slow, or rejecting a token must not be reported as "that version does not
+exist" — that is how an agent talks someone out of a dependency that is fine. When several backends
+are consulted, an inconclusive error deliberately outranks a definitive miss.
+
+### Where the alternatives are the better choice
+
+- **You need to *do* something in GitLab.** `glab` covers merge requests, pipelines, issues and
+  releases. This is read-only artifact metadata and always will be.
+- **A one-off lookup on a machine where `glab` is already authenticated.** Running the CLI beats
+  deploying a service.
+- **Anything outside Maven layout** — npm, PyPI, container tags. Out of scope.
+
+The reverse also holds: many MCP clients grant no shell at all, and a CLI-wrapping skill needs the
+tool installed, authenticated and configured on every laptop and CI runner that uses it. One
+container everyone points at is a different operational shape.
+
 ## Backends
 
 Sources are consulted in precedence order; the first one that has the artifact wins. Keyword search
