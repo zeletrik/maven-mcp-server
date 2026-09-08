@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Test & Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'corretto'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run tests and Detekt
+        run: ./gradlew clean test detekt
+
+  release:
+    name: Semantic Release
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.release.outputs.new_release_published }}
+      version: ${{ steps.version.outputs.VERSION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      # Plugin SELECTION lives in .releaserc.yml; this block only INSTALLS the non-bundled ones.
+      # The two lists must stay in step: a plugin named in .releaserc.yml but missing here fails to
+      # resolve at runtime. Note that .releaserc.yml is also what keeps @semantic-release/npm out of
+      # the default plugin list — without it, the run dies on "Missing package.json".
+      - name: Run semantic-release
+        id: release
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          extra_plugins: |
+            @semantic-release/exec@6
+            @semantic-release/git@10
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
+      - name: Read version from gradle.properties
+        id: version
+        if: steps.release.outputs.new_release_published == 'true'
+        run: |
+          VERSION=$(grep '^version' gradle.properties | sed 's/version = //')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build JAR
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'corretto'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build JAR
+        run: ./gradlew build -x test
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/*.jar
+          retention-days: 1
+
+  docker:
+    name: Docker Build & Push
+    needs: [release, build]
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+    steps:
+      - name: Verify a version was produced
+        run: test -n "${{ needs.release.outputs.version }}"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64
+          context: .
+          push: true
+          # Single-arch homelab image: skip the provenance attestation so `docker pull` gets a
+          # plain image manifest rather than an OCI index.
+          provenance: false
+          build-args: APP_VERSION=${{ needs.release.outputs.version }}
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/maven-mcp-server:${{ needs.release.outputs.version }}
+            ${{ env.DOCKERHUB_USERNAME }}/maven-mcp-server:latest

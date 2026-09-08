@@ -1,0 +1,9 @@
+# Only DEVIATIONS from detekt's defaults belong here: build.gradle.kts sets
+# buildUponDefaultConfig = true, so every rule not mentioned below keeps its default.
+
+style:
+  ReturnCount:
+    # MavenHttpClient.fetchText and CompositeArtifactRepository.failover each map several distinct
+    # failure branches onto the sealed result. Early returns keep every branch flat and obvious;
+    # collapsing them to two would mean nesting, which reads worse than the lint it would satisfy.
+    max: 4

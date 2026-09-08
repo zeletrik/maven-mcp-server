@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: maven-mcp-server
+  ai:
+    mcp:
+      server:
+        # ASYNC is required so Mono-returning @McpTool methods register at all; under the default
+        # SYNC the annotation scanner silently ignores them and the server starts with no tools.
+        type: ASYNC
+        protocol: STATELESS
+        version: ${APP_VERSION:0.0.0-dev}
+        annotation-scanner:
+          enabled: true
+
+maven-central:
+  metadata-base-url: "https://repo1.maven.org/maven2/"
+  search-base-url: "https://search.maven.org/solrsearch/select"
+  timeout: 5s
+
+# Gradle Plugin Portal, consulted LAST. Public (no credentials), so it is on by default; it covers
+# Gradle plugin marker artifacts (<plugin-id>:<plugin-id>.gradle.plugin) that Maven Central does not
+# host. The portal fronts Central with a 303 for anything it does not host itself, which the backend
+# maps to not-found rather than following (see GradlePluginPortalArtifactRepository).
+gradle-plugin-portal:
+  enabled: true
+  base-url: "https://plugins.gradle.org/m2/"
+  timeout: 5s
+
+# Optional GitLab Maven registry backend, consulted AFTER Maven Central (failover precedence).
+# Opt in with `enabled: true` and point base-url at a full GitLab Maven registry URL; the registry
+# level is encoded in the URL itself, so no separate level setting is needed:
+#   project:  https://gitlab.example.com/api/v4/projects/<id>/packages/maven
+#   group:    https://gitlab.example.com/api/v4/groups/<id>/-/packages/maven
+#   instance: https://gitlab.example.com/api/v4/packages/maven
+# <id> may be numeric or a URL-encoded path (e.g. my-org%2Fmy-group). No deployment-specific URL is
+# committed here: base-url and search-url come from GITLAB_BASE_URL / GITLAB_SEARCH_URL, and the
+# token binds from GITLAB_TOKEN through Spring's relaxed binding (env vars outrank this file), or may
+# reference any placeholder such as ${GITLAB_TOKEN}. token-header is one of
+# PRIVATE_TOKEN (default) | DEPLOY_TOKEN | JOB_TOKEN | BEARER.
+gitlab:
+  enabled: false
+  base-url: ${GITLAB_BASE_URL:}
+  # search-url: GitLab Packages API base for keyword search (search_artifacts aggregates it with
+  # Central). A DIFFERENT endpoint from base-url. Leave it blank to DERIVE it from base-url
+  # (…/-/packages/maven or …/packages/maven -> …/packages), which keeps the two in step; set it only
+  # to override. Instance-level base URLs have no packages API, so a blank search-url disables
+  # GitLab search there.
+  search-url: ${GITLAB_SEARCH_URL:}
+  token: ""
+  token-header: PRIVATE_TOKEN
+  timeout: 5s

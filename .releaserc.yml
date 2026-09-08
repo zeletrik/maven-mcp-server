@@ -1,0 +1,36 @@
+# semantic-release configuration.
+#
+# The plugin list below is spelled out IN FULL, deliberately. With no config file semantic-release
+# falls back to its DEFAULT plugin list, which includes @semantic-release/npm — and that plugin
+# fails verifyConditions here with "ENOPKG Missing `package.json`", because this is a Gradle project
+# with no npm package to publish. Listing the plugins explicitly is the whole reason npm stays out,
+# so do not delete this file expecting the defaults to do the right thing.
+#
+# The release version lives in gradle.properties: exec stamps it in, git commits it back, and
+# .github/workflows/release.yml then reads it out again to name the JAR and tag the Docker image.
+# exec and git are installed by that workflow's `extra_plugins:` block, NOT by semantic-release
+# itself — so adding a plugin here means adding it there too, or it will not resolve at runtime.
+
+branches:
+  - main
+
+tagFormat: "v${version}"
+
+plugins:
+  # Decide the bump from Conventional Commits, then render the release notes.
+  - "@semantic-release/commit-analyzer"
+  - "@semantic-release/release-notes-generator"
+
+  # Stamp the resolved version into the Gradle build so the JAR filename and image tag carry it.
+  - - "@semantic-release/exec"
+    - prepareCmd: "sed -i 's/^version = .*/version = ${nextRelease.version}/' gradle.properties"
+
+  # Commit that bump back to main. [skip ci] is load-bearing, not decoration: this push lands on
+  # main, which is the branch that triggers the release workflow, so without it each release would
+  # retrigger the workflow that produced it.
+  - - "@semantic-release/git"
+    - assets: ["gradle.properties"]
+      message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+
+  # Create the GitHub release last, once the tag and the version commit both exist.
+  - "@semantic-release/github"
