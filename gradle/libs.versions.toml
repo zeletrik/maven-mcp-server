@@ -1,14 +1,14 @@
 [versions]
 java = "25"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 detekt = "2.0.0-alpha.6"
-spring-boot = "4.1.1"
+spring-boot = "4.1.2"
 spring-dependency-management = "1.1.7"
-spring-modulith = "2.1.1"
-spring-ai = "2.0.1"
-maven-artifact = "3.9.16"
-mockk = "1.14.11"
-mockwebserver = "5.5.0"
+spring-modulith = "2.1.2"
+spring-ai = "2.0.2"
+maven-artifact = "3.10.1"
+mockk = "1.14.12"
+mockwebserver = "5.5.1"
 
 [libraries]
 spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }

@@ -11,7 +11,7 @@ precedence: Maven Central (always), the Gradle Plugin Portal (on by default — 
 credentials), and an opt-in GitLab Maven registry.
 
 Stack: Kotlin 2.4 on a Java 25 toolchain, Spring Boot 4.1 WebFlux, Spring Modulith, Jackson 3
-(`tools.jackson.*` packages, not `com.fasterxml`), Gradle 9.6.1 with a version catalog
+(`tools.jackson.*` packages, not `com.fasterxml`), Gradle 9.9.1 with a version catalog
 (`gradle/libs.versions.toml`). Actuator exposes `health`, `info` and `prometheus` only.
 
 ## Commands
@@ -93,7 +93,7 @@ module means updating that test. `ArchitectureGuardTest` enforces declined depen
 
 - Tool layer: MockK-mocked `ArtifactRepository`, no HTTP; `StepVerifier` over the returned `Mono`;
   negative paths asserted with `verify(exactly = 0)` on the repository mock.
-- Backend adapters: okhttp3 `MockWebServer` 4.x driving the real WebClient path (stay on the legacy
+- Backend adapters: okhttp3 `MockWebServer` driving the real WebClient path (stay on the legacy
   `com.squareup.okhttp3:mockwebserver` coordinate — `SocketPolicy.NO_RESPONSE` doesn't exist in
   mockwebserver3/okhttp 5).
 - `VersionResolver`: plain unit tests, no Spring context.
@@ -133,4 +133,10 @@ module means updating that test. `ArchitectureGuardTest` enforces declined depen
   list includes `@semantic-release/npm`, which fails this repo with `ENOPKG Missing package.json` —
   there is no npm package here. The version flows gradle.properties → JAR name → image tag:
   `@semantic-release/exec` stamps it in, `@semantic-release/git` commits it (with `[skip ci]`, since
-  the push lands on the branch that triggers the workflow), then the workflow reads it back.
+  the push lands on the branch that triggers the workflow). The workflow takes the version from
+  semantic-release's `new_release_version` output and builds the JAR and image from the `v<version>`
+  tag, whose commit carries the bumped gradle.properties. Images go to GHCR
+  (`ghcr.io/<owner>/maven-mcp-server`) with the job's `GITHUB_TOKEN`; no registry secrets are needed.
+- The Dockerfile pins its Corretto base by **digest**, deliberately: the pinned build
+  (Corretto 25.0.5.1.2) is the first one fixed for CVE-2026-114938 ("Java4Shell"). A floating
+  `25-alpine` tag could ship a stale, vulnerable JDK from a cached pull. Bump tag and digest together.

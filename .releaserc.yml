@@ -6,8 +6,8 @@
 # with no npm package to publish. Listing the plugins explicitly is the whole reason npm stays out,
 # so do not delete this file expecting the defaults to do the right thing.
 #
-# The release version lives in gradle.properties: exec stamps it in, git commits it back, and
-# .github/workflows/release.yml then reads it out again to name the JAR and tag the Docker image.
+# The release version lives in gradle.properties: exec stamps it in and git commits it back, so the
+# v<version> tag that .github/workflows/release.yml builds the JAR and Docker image from carries it.
 # exec and git are installed by that workflow's `extra_plugins:` block, NOT by semantic-release
 # itself — so adding a plugin here means adding it there too, or it will not resolve at runtime.
 

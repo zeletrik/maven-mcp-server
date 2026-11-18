@@ -181,7 +181,7 @@ instance  https://gitlab.example.com/api/v4/packages/maven
 ### Docker
 
 ```sh
-docker run -d --name maven-mcp -p 8080:8080 zeletrik/maven-mcp-server:latest
+docker run -d --name maven-mcp -p 8080:8080 ghcr.io/zeletrik/maven-mcp-server:latest
 ```
 
 That is the whole setup for the public backends — Maven Central and the Gradle Plugin Portal need no
@@ -195,7 +195,7 @@ docker run -d --name maven-mcp -p 8080:8080 \
   -e GITLAB_ENABLED=true \
   -e GITLAB_BASE_URL="https://gitlab.example.com/api/v4/groups/<id>/-/packages/maven" \
   -e GITLAB_TOKEN="$GITLAB_TOKEN" \
-  zeletrik/maven-mcp-server:latest
+  ghcr.io/zeletrik/maven-mcp-server:latest
 ```
 
 ### Docker Compose
@@ -204,7 +204,7 @@ docker run -d --name maven-mcp -p 8080:8080 \
 # compose.yaml
 services:
   maven-mcp:
-    image: zeletrik/maven-mcp-server:latest
+    image: ghcr.io/zeletrik/maven-mcp-server:latest
     container_name: maven-mcp
     restart: unless-stopped
     ports:
