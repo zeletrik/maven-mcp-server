@@ -180,6 +180,10 @@ instance  https://gitlab.example.com/api/v4/packages/maven
 
 ### Docker
 
+**Registry migration:** Images are now published to `ghcr.io/zeletrik/maven-mcp-server`.
+The Docker Hub image `zeletrik/maven-mcp-server` no longer receives updates. Update existing
+Docker commands and Compose configurations to use GHCR to keep receiving releases and security fixes.
+
 ```sh
 docker run -d --name maven-mcp -p 8080:8080 ghcr.io/zeletrik/maven-mcp-server:latest
 ```
