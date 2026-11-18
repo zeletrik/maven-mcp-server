@@ -1,6 +1,12 @@
 # Stage 1: Build in the CI
 # Stage 2: Optimizer for extracting layers
-FROM public.ecr.aws/docker/library/amazoncorretto:25-alpine AS optimizer
+#
+# Both stages pin the base image by DIGEST, not just by tag. A floating tag such as `25-alpine`
+# lets a cached or stale pull ship whatever JDK it last saw; the digest makes every fresh build
+# use exactly this JDK. This one is Corretto 25.0.5.1.2 (2026-11-17), the first Corretto 25 build
+# fixed for CVE-2026-114938 ("Java4Shell", RCE in the AVX-512 Base64 decoder intrinsic). Bump
+# the tag and digest together, and never to a build older than that.
+FROM public.ecr.aws/docker/library/amazoncorretto:25.0.5-alpine3.24@sha256:1124f698f69d2185828dbd1a1ebeb9aee21884ac64bed7af3deeafd20b21a9dc AS optimizer
 
 ARG APP_VERSION
 
@@ -18,8 +24,8 @@ RUN java -Djarmode=tools -jar service.jar extract --destination application
 # with SIGILL (illegal instruction) on a host whose CPU lacks those extensions. Portability wins
 # over the small startup speedup; see the ENTRYPOINT below.
 
-# Stage 3: Final
-FROM public.ecr.aws/docker/library/amazoncorretto:25-alpine
+# Stage 3: Final (same pinned, Java4Shell-patched base as the optimizer stage)
+FROM public.ecr.aws/docker/library/amazoncorretto:25.0.5-alpine3.24@sha256:1124f698f69d2185828dbd1a1ebeb9aee21884ac64bed7af3deeafd20b21a9dc
 
 ARG APP_VERSION
 # Promote the build arg to a runtime variable. application.yaml reads ${APP_VERSION:0.0.0-dev} for
